@@ -87,7 +87,7 @@ export default function Motivation() {
           { label:'This Month', icon:'💎', text:monthChallenge, color:'#A855F7', period:'Monthly' },
         ].map((c, i) => (
           <div key={i} className="surface-card" style={{ marginBottom:10, borderLeft:`3px solid ${c.color}`,
-            animation:`fadeInUp 0.35s ease both ${0.2+i*0.1}s` }}>
+            animation:`fadeInUp 0.35s ease backwards ${0.2+i*0.1}s` }}>
             <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
               <span style={{ fontSize:24, flexShrink:0 }}>{c.icon}</span>
               <div style={{ flex:1 }}>

@@ -58,7 +58,7 @@ export default function Dashboard({ setPage }) {
   const taskLog = taskLogs[today] || {};
 
   const habitsDone = Object.values(habitLog).filter(Boolean).length;
-  const tasksDone  = Object.values(taskLog).filter(Boolean).length;
+  const tasksDone  = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
   const tasksRemaining = DEFAULT_TASKS.length - tasksDone;
 
   // Compute streak
@@ -77,7 +77,7 @@ export default function Dashboard({ setPage }) {
   const heroIdx = new Date().getDate() % HERO_IMAGES.length;
 
   const upcomingTasks = DEFAULT_TASKS
-    .filter(t => !taskLog[t.id])
+    .filter(t => !t.allDay && !taskLog[t.id])
     .slice(0, 3);
 
   return (
@@ -152,7 +152,7 @@ export default function Dashboard({ setPage }) {
         {/* Score ring */}
         <div className="glass-card" style={{
           gridColumn: '1/-1', display:'flex', alignItems:'center',
-          gap:24, padding:24, animation: 'fadeInUp 0.4s ease both 0.1s'
+          gap:24, padding:24, animation: 'fadeInUp 0.4s ease backwards 0.1s'
         }}>
           <CircularRing score={score} size={130} />
           <div style={{ flex:1 }}>
@@ -187,12 +187,12 @@ export default function Dashboard({ setPage }) {
         </div>
 
         {/* Streaks */}
-        <div className="streak-badge" style={{ animation:'fadeInUp 0.4s ease both 0.2s' }}>
+        <div className="streak-badge" style={{ animation:'fadeInUp 0.4s ease backwards 0.2s' }}>
           <span style={{ fontSize:22 }}>🔥</span>
           <span className="streak-number">{streak}</span>
           <span className="label-sm">Day Streak</span>
         </div>
-        <div className="streak-badge" style={{ animation:'fadeInUp 0.4s ease both 0.25s' }}>
+        <div className="streak-badge" style={{ animation:'fadeInUp 0.4s ease backwards 0.25s' }}>
           <span style={{ fontSize:22 }}>⚡</span>
           <span className="streak-number">{score}</span>
           <span className="label-sm">Today Score</span>
@@ -244,7 +244,7 @@ export default function Dashboard({ setPage }) {
             {upcomingTasks.map((task, i) => (
               <div key={task.id} className="surface-card" style={{
                 display:'flex', alignItems:'center', gap:14, padding:'14px 16px',
-                animation:`fadeInUp 0.3s ease both ${0.4 + i*0.08}s`
+                animation:`fadeInUp 0.3s ease backwards ${0.4 + i*0.08}s`
               }}>
                 <span style={{ fontSize:22 }}>{task.icon}</span>
                 <div style={{ flex:1 }}>
@@ -261,7 +261,7 @@ export default function Dashboard({ setPage }) {
       </div>
 
       {/* Quick Links */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:'var(--sp-md)', animation:'fadeInUp 0.4s ease both 0.5s' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:'var(--sp-md)', animation:'fadeInUp 0.4s ease backwards 0.5s' }}>
         {[
           { icon:'school', label:'Knowledge', page:'knowledge', emoji:'📚' },
           { icon:'emoji_events', label:'Achievements', page:'achievements', emoji:'🏆' },

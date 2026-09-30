@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import TopBar from './components/Layout/TopBar';
 import BottomNav from './components/Layout/BottomNav';
+import Scene3D, { useTilt3D } from './components/Layout/Scene3D';
 import Dashboard from './pages/Dashboard';
 import DailyPlanner from './pages/DailyPlanner';
 import HabitTracker from './pages/HabitTracker';
@@ -23,6 +24,19 @@ const PAGES = {
   motivation:  { label: 'Inspire',     icon: 'bolt',         component: Motivation },
 };
 
+// Accent colour + glow per page (drives cards, tabs, nav and the 3D background)
+const ACCENTS = {
+  dashboard:    ['#D4AF37', 'rgba(212,175,55,0.35)'],
+  planner:      ['#F5B94A', 'rgba(245,185,74,0.35)'],
+  habits:       ['#34D399', 'rgba(52,211,153,0.35)'],
+  journal:      ['#A78BFA', 'rgba(167,139,250,0.35)'],
+  knowledge:    ['#5B9DFF', 'rgba(91,157,255,0.35)'],
+  stats:        ['#22D3EE', 'rgba(34,211,238,0.32)'],
+  achievements: ['#D4AF37', 'rgba(212,175,55,0.4)'],
+  calendar:     ['#FF8A5B', 'rgba(255,138,91,0.35)'],
+  motivation:   ['#FF5C7A', 'rgba(255,92,122,0.35)'],
+};
+
 const NAV_ITEMS = [
   { key: 'dashboard',    label: 'Home',    icon: 'home' },
   { key: 'planner',      label: 'Planner', icon: 'calendar_month' },
@@ -34,11 +48,14 @@ const NAV_ITEMS = [
 export default function App() {
   const [page, setPage] = useState('dashboard');
   const PageComponent = PAGES[page]?.component || Dashboard;
+  const [accent, glow] = ACCENTS[page] || ACCENTS.dashboard;
+  useTilt3D();
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg-base)' }}>
+    <div className="app3d" style={{ '--accent': accent, '--accent-glow': glow }}>
+      <Scene3D />
       <TopBar currentPage={page} setPage={setPage} PAGES={PAGES} />
-      <PageComponent setPage={setPage} />
+      <PageComponent key={page} setPage={setPage} />
       <BottomNav current={page} setPage={setPage} items={NAV_ITEMS} />
     </div>
   );

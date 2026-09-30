@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useStore, DEFAULT_HABITS } from '../store/useStore';
+import { useStore, DEFAULT_HABITS, DEFAULT_TASKS } from '../store/useStore';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler
@@ -39,8 +39,8 @@ export default function Statistics() {
     const hl = habitLogs[key] || {};
     const tl = taskLogs[key] || {};
     const hd = Object.values(hl).filter(Boolean).length;
-    const td = Object.values(tl).filter(Boolean).length;
-    return Math.round((hd / DEFAULT_HABITS.length) * 60 + (td / 15) * 40);
+    const td = DEFAULT_TASKS.filter(t => tl[t.id]).length;
+    return Math.round((hd / DEFAULT_HABITS.length) * 60 + (td / DEFAULT_TASKS.length) * 40);
   });
 
   const habitCategories = {

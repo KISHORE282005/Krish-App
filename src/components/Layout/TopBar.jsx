@@ -68,35 +68,20 @@ export default function TopBar({ currentPage, setPage }) {
               zIndex: 200, backdropFilter: 'blur(4px)',
             }}
           />
-          <nav style={{
-            position: 'fixed', top: 0, right: 0, bottom: 0, width: 260,
-            background: 'var(--bg-surface-low)',
-            borderLeft: '1px solid var(--border-light)',
-            zIndex: 201, padding: '80px 20px 20px',
-            display: 'flex', flexDirection: 'column', gap: 8,
-            animation: 'fadeIn 0.2s ease',
-          }}>
+          <nav className="drawer3d">
             <p className="label-sm" style={{ marginBottom: 12, paddingLeft: 12 }}>Navigation</p>
             {ALL_PAGES.map(p => (
               <button
                 key={p.key}
+                className={`drawer-item ${currentPage === p.key ? 'active' : ''}`}
                 onClick={() => { setPage(p.key); setMenuOpen(false); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '12px 16px', borderRadius: 'var(--r-lg)',
-                  border: 'none', cursor: 'pointer',
-                  background: currentPage === p.key ? 'rgba(212,175,55,0.12)' : 'transparent',
-                  color: currentPage === p.key ? 'var(--gold)' : 'var(--text-secondary)',
-                  fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 500,
-                  transition: 'all 0.2s', width: '100%', textAlign: 'left',
-                }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{p.icon}</span>
                 {p.label}
               </button>
             ))}
 
-            <div style={{ marginTop: 'auto', padding: '16px', background: 'var(--bg-surface-mid)', borderRadius: 'var(--r-lg)' }}>
+            <div className="drawer-user">
               <p className="label-sm" style={{ marginBottom: 4 }}>Logged in as</p>
               <p style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 15 }}>{userName}</p>
             </div>

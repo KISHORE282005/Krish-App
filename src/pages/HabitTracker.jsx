@@ -120,18 +120,16 @@ export default function HabitTracker() {
             <div
               key={habit.id}
               className={`habit-item ${done ? 'done' : ''}`}
-              style={{ animation:`fadeInUp 0.3s ease both ${i*0.05}s`, cursor:'pointer' }}
+              style={{ animation:`fadeInUp 0.3s ease backwards ${i*0.05}s`, cursor:'pointer' }}
               onClick={() => handleToggle(habit.id)}
             >
               {/* Check button */}
               <div className="habit-check" style={{
-                background: done ? 'var(--emerald)' : 'transparent',
-                borderColor: done ? 'var(--emerald)' : 'var(--bg-surface-top)',
                 transform: justToggled === habit.id ? 'scale(1.3)' : 'scale(1)',
                 transition: 'all 0.25s ease',
               }}>
                 {done && (
-                  <span className="material-symbols-outlined" style={{ color:'#fff', fontSize:14 }}>check</span>
+                  <span className="material-symbols-outlined" style={{ color:'#062b1f', fontSize:17, fontVariationSettings:"'wght' 700" }}>check</span>
                 )}
               </div>
 

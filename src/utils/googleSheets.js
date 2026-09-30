@@ -1,3 +1,5 @@
+import { DEFAULT_TASKS } from '../store/routine';
+
 /*
  * Google Sheets Sync Utility for Ascend
  *
@@ -54,7 +56,7 @@ function buildDailyPayload(state) {
   const journal = state.journals[d] || null;
 
   const habitsDone = Object.values(habitLog).filter(Boolean).length;
-  const tasksDone = Object.values(taskLog).filter(Boolean).length;
+  const tasksDone = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
 
   // Compute streak
   let streak = 0;
@@ -68,7 +70,7 @@ function buildDailyPayload(state) {
   }
 
   // Compute score
-  const score = Math.round(((habitsDone / 15) * 60 + (tasksDone / 14) * 40));
+  const score = Math.round(((habitsDone / 15) * 60 + (tasksDone / DEFAULT_TASKS.length) * 40));
 
   return {
     date: d,
@@ -77,8 +79,8 @@ function buildDailyPayload(state) {
     habitsTotal: 15,
     habitsPct: Math.round((habitsDone / 15) * 100),
     tasksDone,
-    tasksTotal: 14,
-    tasksPct: Math.round((tasksDone / 14) * 100),
+    tasksTotal: DEFAULT_TASKS.length,
+    tasksPct: Math.round((tasksDone / DEFAULT_TASKS.length) * 100),
     streak,
     habits: habitLog,
     tasks: taskLog,

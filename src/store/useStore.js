@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { scheduleSync, syncNow, getSyncStatus } from '../utils/googleSheets';
+import { DEFAULT_TASKS } from './routine';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -22,22 +23,7 @@ const DEFAULT_HABITS = [
   { id: 'journal',     icon: '📓', label: 'Journal',              category: 'personal' },
 ];
 
-const DEFAULT_TASKS = [
-  { id: 't1', time: '05:10', endTime: '05:40', icon: '🏃', label: 'Morning Exercise',     priority: 'high',   done: false },
-  { id: 't2', time: '05:45', endTime: '07:10', icon: '🧘', label: 'Learning',            priority: 'medium', done: false },
-  { id: 't4', time: '06:30', endTime: '07:00', icon: '📚', label: 'English Learning New Words',     priority: 'high',   done: false },
-  { id: 't5', time: '07:00', endTime: '07:30', icon: '🚿', label: 'Bath & Grooming',      priority: 'medium', done: false },
-  { id: 't6', time: '07:30', endTime: '09:00', icon: '💻', label: 'Deep Work Session',    priority: 'high',   done: false },
-  { id: 't7', time: '09:00', endTime: '09:15', icon: '🥤', label: 'Healthy Shake',        priority: 'medium', done: false },
-  { id: 't8', time: '12:00', endTime: '13:00', icon: '🍽️', label: 'Lunch Break',          priority: 'low',    done: false },
-  { id: 't9', time: '13:00', endTime: '17:00', icon: '💼', label: 'Work / Studies',       priority: 'high',   done: false },
-  { id:'t10', time: '17:30', endTime: '18:30', icon: '🚴', label: 'Cycling',              priority: 'high',   done: false },
-  { id:'t11', time: '19:00', endTime: '19:30', icon: '🇩🇪', label: 'German Lesson',       priority: 'high',   done: false },
-  { id:'t12', time: '19:30', endTime: '20:00', icon: '📈', label: 'Stock Market Study',   priority: 'medium', done: false },
-  { id:'t13', time: '20:00', endTime: '20:30', icon: '📰', label: 'Tech News',            priority: 'low',    done: false },
-  { id:'t14', time: '21:00', endTime: '21:30', icon: '👨‍👩‍👧', label: 'Family Time',     priority: 'high',   done: false },
-  { id:'t15', time: '21:30', endTime: '22:00', icon: '📓', label: 'Night Journal',        priority: 'high',   done: false },
-];
+
 
 const parseTimeToMinutes = (time) => {
   const [hours, mins] = time.split(':').map(Number);
@@ -87,6 +73,9 @@ export const useStore = create(
       // Tasks - keyed by date string
       taskLogs: {}, // { 'YYYY-MM-DD': { taskId: boolean } }
 
+      // Planner text (Top 3, idea, review) - keyed by date string
+      plannerNotes: {}, // { 'YYYY-MM-DD': { fieldKey: string | boolean } }
+
       // Journals - keyed by date string
       journals: {}, // { 'YYYY-MM-DD': journalObject }
 
@@ -127,11 +116,13 @@ export const useStore = create(
         const tasks = DEFAULT_TASKS.map(t => ({ ...t, done: overrides[t.id] ?? t.done }));
         const nowMins = getCurrentMinutes();
 
-        const activeTask = tasks.find(t => !t.done && nowMins >= parseTimeToMinutes(t.time) && nowMins <= parseTimeToMinutes(t.endTime));
+        const timed = tasks.filter(t => !t.allDay);
+
+        const activeTask = timed.find(t => !t.done && nowMins >= parseTimeToMinutes(t.time) && nowMins <= parseTimeToMinutes(t.endTime));
         if (activeTask) return activeTask;
 
-        const nextTask = tasks.find(t => !t.done && parseTimeToMinutes(t.time) >= nowMins);
-        return nextTask || tasks.find(t => !t.done) || null;
+        const nextTask = timed.find(t => !t.done && parseTimeToMinutes(t.time) >= nowMins);
+        return nextTask || timed.find(t => !t.done) || null;
       },
       getTodayScore: () => {
         const state = get();
@@ -141,7 +132,7 @@ export const useStore = create(
         const habitLog = state.habitLogs[d] || {};
         const taskLog = state.taskLogs[d] || {};
         const habitDone = Object.values(habitLog).filter(Boolean).length;
-        const taskDone = Object.values(taskLog).filter(Boolean).length;
+        const taskDone = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
         const habitMax = DEFAULT_HABITS.length;
         const taskMax = DEFAULT_TASKS.length;
         return Math.round(((habitDone / habitMax) * 60 + (taskDone / taskMax) * 40));
@@ -172,6 +163,12 @@ export const useStore = create(
           scheduleSync({ ...state, taskLogs: { ...state.taskLogs, [d]: updated } });
           return { taskLogs: { ...state.taskLogs, [d]: updated } };
         });
+      },
+      setPlannerNote: (key, value) => {
+        const d = today();
+        set(state => ({
+          plannerNotes: { ...state.plannerNotes, [d]: { ...(state.plannerNotes[d] || {}), [key]: value } },
+        }));
       },
       saveJournal: (data) => {
         const d = today();
