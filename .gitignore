@@ -25,11 +25,3 @@ dist-ssr
 
 # Local database (personal data – never commit)
 data/
-
-# Secrets (Turso keys)
-.env
-.env.*
-!.env.example
-
-# Netlify local state
-.netlify/

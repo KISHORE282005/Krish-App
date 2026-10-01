@@ -11,7 +11,7 @@ export default function Journal({ setPage }) {
   const existing = journals[today];
 
   const [view, setView] = useState('write'); // 'write' | 'past'
-  const [saved, setSaved] = useState(null); // null | 'saving' | 'db' | 'queued'
+  const [saved, setSaved] = useState(false);
   const [form, setForm] = useState(existing || {
     achievement: '',
     mistake: '',
@@ -25,13 +25,12 @@ export default function Journal({ setPage }) {
 
   const handleChange = (field, val) => {
     setForm(prev => ({ ...prev, [field]: val }));
-    setSaved(null);
+    setSaved(false);
   };
 
-  const handleSave = async () => {
-    setSaved('saving');
-    const inDb = await saveJournal(form);
-    setSaved(inDb ? 'db' : 'queued');
+  const handleSave = () => {
+    saveJournal(form);
+    setSaved(true);
   };
 
   const pastJournals = Object.entries(journals)
@@ -132,13 +131,11 @@ export default function Journal({ setPage }) {
           <button
             className="btn-primary"
             onClick={handleSave}
-            disabled={saved === 'saving'}
             style={{ width:'100%', justifyContent:'center', fontSize:14, padding:18, marginTop:8 }}
           >
-            {saved === 'saving' ? 'Saving…' : saved === 'db' ? '✓ Saved to database' : '💾 Save Journal Entry'}
+            {saved ? '✓ Saved' : '💾 Save Journal Entry'}
           </button>
-          {saved === 'db' && <p className="save-note ok">Stored safely. You can see it under Past Entries anytime.</p>}
-          {saved === 'queued' && <p className="save-note warn">Saved on this device. The database server isn't reachable — it will be stored automatically when it's back.</p>}
+          {saved && <p className="save-note ok">Saved on this device. See it anytime under Past Entries.</p>}
           {!saved && existing?.savedAt && (
             <p className="save-note">Last saved {new Date(existing.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p>
           )}

@@ -4,7 +4,7 @@ import { scheduleSync, syncNow, getSyncStatus } from '../utils/googleSheets';
 import {
   DEFAULT_TASKS, HABITS, habitTaskIds, deriveHabitLog, DAY_DONE_RATIO, LEGACY_HABIT_COUNT,
 } from './routine';
-import * as api from '../utils/api';
+import * as auth from '../utils/auth';
 import { today, dateKey, addDays, parseKey } from '../utils/date';
 
 // Habits now come from the planner (see routine.js). Kept under the old name for the pages.
@@ -71,10 +71,6 @@ function deriveAllHabits(taskLogs = {}, plannerNotes = {}) {
 const HABITS_NEEDED = Math.ceil(HABITS.length * DAY_DONE_RATIO);
 const LEGACY_NEEDED = Math.ceil(LEGACY_HABIT_COUNT * DAY_DONE_RATIO);
 
-// Debounced saves for fields typed character-by-character.
-const noteTimers = {};
-const debounce = (key, fn, ms = 600) => { clearTimeout(noteTimers[key]); noteTimers[key] = setTimeout(fn, ms); };
-
 export const useStore = create(
   persist(
     (set, get) => ({
@@ -82,7 +78,7 @@ export const useStore = create(
       ...EMPTY_DATA,
       userAvatar: null,
 
-      // Auth (not persisted): 'checking' | 'out' | 'in' | 'offline'
+      // Auth (not persisted): 'checking' | 'out' | 'in'
       auth: { status: 'checking', user: null, error: null },
 
       /* ── Getters ── */
@@ -171,7 +167,6 @@ export const useStore = create(
           const taskLogs = { ...state.taskLogs, [d]: updated };
           const habitLogs = { ...state.habitLogs, [d]: deriveHabitLog(updated, state.plannerNotes[d]) };
           scheduleSync({ ...state, taskLogs, habitLogs });
-          api.saveEntry('tasks', d, updated);
           return { taskLogs, habitLogs };
         });
       },
@@ -192,7 +187,6 @@ export const useStore = create(
         const d = today();
         set(state => {
           const notes = { ...(state.plannerNotes[d] || {}), [key]: value };
-          debounce(`notes|${d}`, () => api.saveEntry('notes', d, get().plannerNotes[d]));
           return {
             plannerNotes: { ...state.plannerNotes, [d]: notes },
             habitLogs: { ...state.habitLogs, [d]: deriveHabitLog(state.taskLogs[d], notes) },
@@ -200,7 +194,7 @@ export const useStore = create(
         });
       },
 
-      /* ── Journal: resolves true once it is in the database, false if queued for retry ── */
+      /* ── Journal ── */
       saveJournal: (data) => {
         const d = today();
         const entry = { ...data, date: d, savedAt: new Date().toISOString() };
@@ -209,73 +203,63 @@ export const useStore = create(
           scheduleSync({ ...state, journals });
           return { journals };
         });
-        return api.saveEntry('journal', d, entry);
       },
 
       /* ── Settings ── */
-      setDailyFocus: (focus) => { set({ dailyFocus: focus }); api.saveSetting('dailyFocus', focus); },
-      updateLifeGoals: (goals) => { set({ lifeGoals: goals }); api.saveSetting('lifeGoals', goals); },
-      updateMission: (ms) => { set({ missionStatement: ms }); api.saveSetting('missionStatement', ms); },
-      setUserName: (name) => { set({ userName: name }); api.saveSetting('userName', name); },
+      setDailyFocus: (focus) => set({ dailyFocus: focus }),
+      updateLifeGoals: (goals) => set({ lifeGoals: goals }),
+      updateMission: (ms) => set({ missionStatement: ms }),
+      setUserName: (name) => set({ userName: name }),
 
       syncToSheets: () => syncNow(get()),
 
-      /* ── Auth + database ── */
-      initAuth: async () => {
-        api.setUnauthorizedHandler(() => set({ auth: { status: 'out', user: null, error: 'Session expired. Please log in again.' } }));
-        if (!api.getToken()) return set({ auth: { status: 'out', user: null, error: null } });
-        set({ auth: { ...get().auth, status: 'checking', error: null } });
-        try {
-          const user = await api.me();
-          await get().loadFromServer();
-          set({ auth: { status: 'in', user, error: null } });
-        } catch (err) {
-          if (err.status === 401) return; // handler already switched to 'out'
-          set({ auth: { status: 'offline', user: null, error: err.message } });
-        }
+      /* ── Auth (checked in the app; see utils/auth.js) ── */
+      initAuth: () => {
+        const user = auth.currentUser();
+        set({ auth: { status: user ? 'in' : 'out', user, error: null } });
       },
-
-      loginWith: async (username, password) => {
-        const user = await api.login(username, password);
-        await get().pushLocalData();
-        await get().loadFromServer();
+      loginWith: (username, password) => {
+        const user = auth.login(username, password); // throws with a message on failure
         set({ auth: { status: 'in', user, error: null } });
       },
-
-      logoutUser: async () => {
-        await api.logout();
-        set({ ...DEFAULT_SETTINGS, ...EMPTY_DATA, auth: { status: 'out', user: null, error: null } });
+      /** Logging out only ends the session; your data stays on this device. */
+      logoutUser: () => {
+        auth.logout();
+        set({ auth: { status: 'out', user: null, error: null } });
       },
 
-      /** Copies data held only in this browser into the database (never overwrites). */
-      pushLocalData: async () => {
+      /* ── Backup: download / restore everything as a JSON file ── */
+      exportBackup: () => {
         const s = get();
-        const nonEmpty = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v && Object.keys(v).length));
-        await api.importData({
-          entries: {
-            journal: s.journals,
-            tasks: nonEmpty(s.taskLogs),
-            notes: nonEmpty(s.plannerNotes),
-            habits_legacy: nonEmpty(s.legacyHabitLogs),
-          },
+        return {
+          app: 'ascend', version: 1, exportedAt: new Date().toISOString(),
+          journals: s.journals, taskLogs: s.taskLogs, plannerNotes: s.plannerNotes, legacyHabitLogs: s.legacyHabitLogs,
           settings: Object.fromEntries(SETTING_KEYS.map(k => [k, s[k]])),
-        });
+        };
       },
-
-      loadFromServer: async () => {
-        await api.flush(); // send queued edits first so they aren't overwritten
-        const { entries, settings } = await api.fetchAll();
-        const taskLogs = entries.tasks || {};
-        const plannerNotes = entries.notes || {};
+      /** Adds days from a backup that this device doesn't have yet (never overwrites). Returns days added. */
+      importBackup: (backup) => {
+        if (!backup || backup.app !== 'ascend') throw new Error('This is not an Ascend backup file.');
+        const s = get();
+        let added = 0;
+        const merge = (current, incoming = {}) => {
+          const out = { ...current };
+          for (const [date, value] of Object.entries(incoming)) {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(date) && value && !(date in out)) { out[date] = value; added++; }
+          }
+          return out;
+        };
+        const taskLogs = merge(s.taskLogs, backup.taskLogs);
+        const plannerNotes = merge(s.plannerNotes, backup.plannerNotes);
         set({
-          ...DEFAULT_SETTINGS,
-          ...Object.fromEntries(SETTING_KEYS.filter(k => k in settings).map(k => [k, settings[k]])),
-          journals: entries.journal || {},
+          journals: merge(s.journals, backup.journals),
           taskLogs,
           plannerNotes,
-          legacyHabitLogs: entries.habits_legacy || {},
+          legacyHabitLogs: merge(s.legacyHabitLogs, backup.legacyHabitLogs),
           habitLogs: deriveAllHabits(taskLogs, plannerNotes),
+          ...Object.fromEntries(SETTING_KEYS.filter(k => backup.settings?.[k] != null).map(k => [k, backup.settings[k]])),
         });
+        return added;
       },
 
       // Helpers exported
@@ -287,7 +271,7 @@ export const useStore = create(
     {
       name: 'ascend-storage',
       version: 2,
-      // Offline cache of the database. Derived habits and auth state are rebuilt on load.
+      // Everything is stored in this browser. Derived habits and auth state are rebuilt on load.
       partialize: (s) => ({
         ...Object.fromEntries(SETTING_KEYS.map(k => [k, s[k]])),
         journals: s.journals, taskLogs: s.taskLogs, plannerNotes: s.plannerNotes, legacyHabitLogs: s.legacyHabitLogs,
