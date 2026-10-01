@@ -248,7 +248,20 @@ export function deriveHabitLog(taskLog = {}, notes = {}) {
   ]));
 }
 
-// A day counts toward the streak when at least half of the habits are done.
-export const DAY_DONE_RATIO = 0.5;
-// Days tracked before the planner-based habits (old 15-habit list): same 50% rule.
+// A day counts toward the streak when its score (0–100) reaches this. Below it, the day adds nothing.
+export const STREAK_MIN_SCORE = 20;
+// Days tracked before the planner-based habits used an old 15-habit list.
 export const LEGACY_HABIT_COUNT = 15;
+
+/**
+ * Daily score 0–100: habits are worth 60, planner tasks 40.
+ * Old-format days (legacy habits only) score their habits out of the same 60.
+ */
+export function dayScore(habitLog = {}, taskLog = {}, legacyLog = {}) {
+  const habitsDone = HABITS.filter(h => habitLog[h.id]).length;
+  const tasksDone = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
+  const legacyDone = Object.values(legacyLog).filter(Boolean).length;
+  const score = (habitsDone / HABITS.length) * 60 + (tasksDone / DEFAULT_TASKS.length) * 40;
+  const legacyScore = (Math.min(legacyDone, LEGACY_HABIT_COUNT) / LEGACY_HABIT_COUNT) * 60;
+  return Math.round(Math.max(score, legacyScore));
+}

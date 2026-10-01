@@ -1,4 +1,4 @@
-import { DEFAULT_TASKS, HABITS } from '../store/routine';
+import { DEFAULT_TASKS, HABITS, dayScore, STREAK_MIN_SCORE } from '../store/routine';
 import { dateKey } from './date';
 
 /*
@@ -64,14 +64,12 @@ function buildDailyPayload(state) {
   const checkDate = new Date();
   for (let i = 0; i < 365; i++) {
     const key = dateKey(checkDate);
-    const hl = state.habitLogs[key] || {};
-    const count = Object.values(hl).filter(Boolean).length;
-    if (count >= Math.ceil(HABITS.length / 2)) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
+    if (dayScore(state.habitLogs[key], state.taskLogs[key], state.legacyHabitLogs?.[key]) >= STREAK_MIN_SCORE) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
     else break;
   }
 
   // Compute score
-  const score = Math.round(((habitsDone / HABITS.length) * 60 + (tasksDone / DEFAULT_TASKS.length) * 40));
+  const score = dayScore(habitLog, taskLog, state.legacyHabitLogs?.[d]);
 
   return {
     date: d,

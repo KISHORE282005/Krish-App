@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store/useStore';
 import { dateKey } from '../utils/date';
+import { STREAK_MIN_SCORE } from '../store/routine';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -116,22 +117,23 @@ export default function StreakCalendar({ open, onClose }) {
             </div>
 
             <div className="streak-legend">
-              <span><i className="lg done" />Done ({doneCount})</span>
-              <span><i className="lg missed" />Not done ({missedCount})</span>
+              <span><i className="lg done" />Score {STREAK_MIN_SCORE}+ ({doneCount})</span>
+              <span><i className="lg missed" />Below {STREAK_MIN_SCORE} ({missedCount})</span>
               <span><i className="lg today" />Today</span>
             </div>
 
             <div className={`streak-detail ${selStatus}`}>
               <p className="label-sm">{selLabel}</p>
               <p className="detail-status">
-                {selStatus === 'done' ? '✅ Done — counted in your streak'
-                  : selStatus === 'today' ? '⏳ In progress — finish half your habits to count it'
-                  : selStatus === 'missed' ? '❌ Not done'
+                {selStatus === 'done' ? `✅ Score ${sel.score} — counted in your streak`
+                  : selStatus === 'today' ? `⏳ Score ${sel.score} so far — reach ${STREAK_MIN_SCORE} to count today`
+                  : selStatus === 'missed' ? `❌ Score ${sel.score} — below ${STREAK_MIN_SCORE}, not counted`
                   : selStatus === 'before' ? 'Before you started tracking'
                   : 'Upcoming'}
               </p>
               {selStatus !== 'future' && selStatus !== 'before' && (
                 <div className="detail-chips">
+                  <span>⚡ Score {sel.score}/100</span>
                   {sel.legacyDone > 0 && sel.habitsDone === 0
                     ? <span>🗂️ {sel.legacyDone}/15 old habits</span>
                     : <span>🎯 {sel.habitsDone}/{sel.habitsTotal} habits</span>}

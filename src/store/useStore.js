@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { scheduleSync, syncNow, getSyncStatus } from '../utils/googleSheets';
 import {
-  DEFAULT_TASKS, HABITS, habitTaskIds, deriveHabitLog, DAY_DONE_RATIO, LEGACY_HABIT_COUNT,
+  DEFAULT_TASKS, HABITS, habitTaskIds, deriveHabitLog, dayScore, STREAK_MIN_SCORE,
 } from './routine';
 import * as auth from '../utils/auth';
 import { today, dateKey, addDays, parseKey } from '../utils/date';
@@ -68,9 +68,6 @@ function deriveAllHabits(taskLogs = {}, plannerNotes = {}) {
   return Object.fromEntries([...dates].map(d => [d, deriveHabitLog(taskLogs[d], plannerNotes[d])]));
 }
 
-const HABITS_NEEDED = Math.ceil(HABITS.length * DAY_DONE_RATIO);
-const LEGACY_NEEDED = Math.ceil(LEGACY_HABIT_COUNT * DAY_DONE_RATIO);
-
 export const useStore = create(
   persist(
     (set, get) => ({
@@ -99,12 +96,10 @@ export const useStore = create(
         const nextTask = timed.find(t => !t.done && parseTimeToMinutes(t.time) >= nowMins);
         return nextTask || timed.find(t => !t.done) || null;
       },
-      getTodayScore: () => {
-        const state = get();
-        const d = today();
-        const habitDone = HABITS.filter(h => state.habitLogs[d]?.[h.id]).length;
-        const taskDone = DEFAULT_TASKS.filter(t => state.taskLogs[d]?.[t.id]).length;
-        return Math.round((habitDone / HABITS.length) * 60 + (taskDone / DEFAULT_TASKS.length) * 40);
+      getTodayScore: () => get().getDayScore(today()),
+      getDayScore: (key) => {
+        const s = get();
+        return dayScore(s.habitLogs[key], s.taskLogs[key], s.legacyHabitLogs[key]);
       },
       getDailyQuote: () => QUOTES[new Date().getDate() % QUOTES.length],
 
@@ -114,12 +109,14 @@ export const useStore = create(
         const habitsDone = HABITS.filter(h => s.habitLogs[key]?.[h.id]).length;
         const tasksDone = DEFAULT_TASKS.filter(t => s.taskLogs[key]?.[t.id]).length;
         const legacyDone = Object.values(s.legacyHabitLogs[key] || {}).filter(Boolean).length;
+        const score = s.getDayScore(key);
         return {
           habitsDone, habitsTotal: HABITS.length,
           tasksDone, tasksTotal: DEFAULT_TASKS.length,
           legacyDone,
+          score,
           journal: !!s.journals[key],
-          done: habitsDone >= HABITS_NEEDED || legacyDone >= LEGACY_NEEDED,
+          done: score >= STREAK_MIN_SCORE, // only days scoring 20+ add to the streak
           hasData: habitsDone > 0 || tasksDone > 0 || legacyDone > 0 || !!s.journals[key],
         };
       },
