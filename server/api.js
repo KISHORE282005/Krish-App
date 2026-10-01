@@ -102,8 +102,17 @@ export function createApiHandler(openDb) {
     } catch (err) {
       if (err instanceof HttpError) return json(err.status, { error: err.message });
       console.error('[ascend]', err);
-      const config = /TURSO_DATABASE_URL/.test(err.message);
-      return json(500, { error: config ? 'Database not configured: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in Netlify.' : 'Server error.' });
+      if (/TURSO_(DATABASE_URL|AUTH_TOKEN) is not set/.test(err.message)) {
+        return json(500, { error: `Database not configured. ${err.message} Add both in Netlify (Functions scope), then redeploy.` });
+      }
+      // Turso reachable but rejected the token / database missing: say so instead of a generic error.
+      if (/401|403|unauthori[sz]ed|forbidden/i.test(err.message)) {
+        return json(500, { error: 'Turso rejected the auth token. Create a new token (read & write) and update TURSO_AUTH_TOKEN, then redeploy.' });
+      }
+      if (/\b404\b|not found/i.test(err.message)) {
+        return json(500, { error: 'Turso database not found. Check TURSO_DATABASE_URL (libsql://<db>-<org>.turso.io), then redeploy.' });
+      }
+      return json(500, { error: 'Server error.' });
     }
   };
 }
