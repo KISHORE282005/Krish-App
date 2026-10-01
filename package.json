@@ -11,9 +11,11 @@
     "set-password": "node --disable-warning=ExperimentalWarning server/set-password.js",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:push": "node --disable-warning=ExperimentalWarning scripts/push-to-cloud.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "chart.js": "^4.5.1",
     "framer-motion": "^12.42.2",
     "react": "^19.2.7",

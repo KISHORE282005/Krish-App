@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  # Shipped as a normal package instead of being bundled: its CommonJS deps break an ESM bundle.
+  external_node_modules = ["@libsql/client"]
+
+# /api/* is routed to netlify/functions/api.mjs by its `config.path`.
+# No SPA catch-all redirect is needed: the app switches pages in-memory and only ever loads "/".
