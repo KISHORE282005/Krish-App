@@ -5,6 +5,7 @@ import {
   ROUTINE, RULES, IDEA_FIELDS, REVIEW_FIELDS, SUCCESS_CHECK, RULE_OF_THE_DAY,
 } from '../store/routine';
 import './DailyPlanner.css';
+import { today as todayKey } from '../utils/date';
 
 const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
@@ -317,7 +318,7 @@ export default function DailyPlanner() {
   const [tab, setTab] = useState(currentSectionId);
   const [dir, setDir] = useState(1);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayKey();
   const log = taskLogs[today] || {};
   const notes = plannerNotes[today] || {};
 

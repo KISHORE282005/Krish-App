@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useStore, DEFAULT_HABITS, DEFAULT_TASKS } from '../store/useStore';
 import { getSyncStatus, SHEETS_WEB_APP_URL } from '../utils/googleSheets';
+import StreakCalendar from '../components/StreakCalendar';
+import { today as todayKey } from '../utils/date';
 
 const HERO_IMAGES = [
   'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80', // mountains
@@ -39,7 +41,8 @@ function CircularRing({ score, size = 160 }) {
 }
 
 export default function Dashboard({ setPage }) {
-  const { userName, getTodayScore, getDailyQuote, habitLogs, taskLogs, dailyFocus, getRecommendedTask, syncToSheets } = useStore();
+  const { userName, getTodayScore, getDailyQuote, habitLogs, taskLogs, dailyFocus, getRecommendedTask, syncToSheets, getStreaks } = useStore();
+  const [streakOpen, setStreakOpen] = useState(false);
   const [syncInfo, setSyncInfo] = useState(() => getSyncStatus());
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export default function Dashboard({ setPage }) {
   const score = getTodayScore();
   const recommendedTask = getRecommendedTask();
   const quote = getDailyQuote();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayKey();
 
   const habitLog = habitLogs[today] || {};
   const taskLog = taskLogs[today] || {};
@@ -61,16 +64,7 @@ export default function Dashboard({ setPage }) {
   const tasksDone  = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
   const tasksRemaining = DEFAULT_TASKS.length - tasksDone;
 
-  // Compute streak
-  let streak = 0;
-  const checkDate = new Date();
-  for (let i = 0; i < 365; i++) {
-    const d = checkDate.toISOString().split('T')[0];
-    const hl = habitLogs[d] || {};
-    const done = Object.values(hl).filter(Boolean).length;
-    if (done >= DEFAULT_HABITS.length * 0.5) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
-    else break;
-  }
+  const { current: streak } = getStreaks();
 
   const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' });
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -187,17 +181,21 @@ export default function Dashboard({ setPage }) {
         </div>
 
         {/* Streaks */}
-        <div className="streak-badge" style={{ animation:'fadeInUp 0.4s ease backwards 0.2s' }}>
+        <button type="button" className="streak-badge" onClick={() => setStreakOpen(true)}
+          style={{ animation:'fadeInUp 0.4s ease backwards 0.2s' }} aria-label="Open streak calendar">
           <span style={{ fontSize:22 }}>🔥</span>
           <span className="streak-number">{streak}</span>
           <span className="label-sm">Day Streak</span>
-        </div>
+          <span className="tap-hint">Tap for calendar <span className="material-symbols-outlined" style={{ fontSize:12 }}>calendar_month</span></span>
+        </button>
         <div className="streak-badge" style={{ animation:'fadeInUp 0.4s ease backwards 0.25s' }}>
           <span style={{ fontSize:22 }}>⚡</span>
           <span className="streak-number">{score}</span>
           <span className="label-sm">Today Score</span>
         </div>
       </div>
+
+      <StreakCalendar open={streakOpen} onClose={() => setStreakOpen(false)} />
 
       {/* Daily Focus */}
       <div className="surface-card anim-fade-up" style={{ marginBottom:'var(--sp-md)', animationDelay:'0.3s' }}>

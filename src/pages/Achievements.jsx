@@ -1,19 +1,8 @@
 import { useStore, ACHIEVEMENTS } from '../store/useStore';
 
 export default function Achievements() {
-  const { habitLogs } = useStore();
-
-  // Compute streak
-  let streak = 0;
-  const checkDate = new Date();
-  const { DEFAULT_HABITS } = useStore.getState();
-  for (let i = 0; i < 365; i++) {
-    const d = checkDate.toISOString().split('T')[0];
-    const hl = habitLogs[d] || {};
-    const done = Object.values(hl).filter(Boolean).length;
-    if (done >= DEFAULT_HABITS.length * 0.5) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
-    else break;
-  }
+  const { current: streak } = useStore(s => s.getStreaks)();
+  useStore(s => s.habitLogs); // re-render on changes
 
   const isUnlocked = (ach) => {
     try { return ach.condition(streak); } catch { return false; }

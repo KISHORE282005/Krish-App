@@ -1,29 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { scheduleSync, syncNow, getSyncStatus } from '../utils/googleSheets';
-import { DEFAULT_TASKS } from './routine';
+import {
+  DEFAULT_TASKS, HABITS, habitTaskIds, deriveHabitLog, DAY_DONE_RATIO, LEGACY_HABIT_COUNT,
+} from './routine';
+import * as api from '../utils/api';
+import { today, dateKey, addDays, parseKey } from '../utils/date';
 
-const today = () => new Date().toISOString().split('T')[0];
-
-const DEFAULT_HABITS = [
-  { id: 'exercise',    icon: '🏃', label: 'Morning Exercise',     category: 'health' },
-  { id: 'breakfast',   icon: '🥗', label: 'Healthy Breakfast',    category: 'health' },
-  { id: 'cycling',     icon: '🚴', label: 'Cycling',              category: 'health' },
-  { id: 'shake',       icon: '🥤', label: 'Healthy Shake',        category: 'health' },
-  { id: 'sleep',       icon: '😴', label: 'Sleep by 10:15 PM',    category: 'health' },
-  { id: 'no_porn',     icon: '🚫', label: 'No Porn',              category: 'discipline' },
-  { id: 'no_reels',    icon: '📵', label: 'No Reels',             category: 'discipline' },
-  { id: 'english',     icon: '🇬🇧', label: 'English Learning',    category: 'learning' },
-  { id: 'german',      icon: '🇩🇪', label: 'German Lesson',       category: 'learning' },
-  { id: 'tech',        icon: '💻', label: 'Technology Update',    category: 'learning' },
-  { id: 'stocks',      icon: '📈', label: 'Stock Market',         category: 'learning' },
-  { id: 'business',    icon: '💼', label: 'Business Knowledge',   category: 'learning' },
-  { id: 'family',      icon: '👨‍👩‍👧', label: 'Family Time',      category: 'personal' },
-  { id: 'music',       icon: '🎵', label: 'Music',                category: 'personal' },
-  { id: 'journal',     icon: '📓', label: 'Journal',              category: 'personal' },
-];
-
-
+// Habits now come from the planner (see routine.js). Kept under the old name for the pages.
+const DEFAULT_HABITS = HABITS;
 
 const parseTimeToMinutes = (time) => {
   const [hours, mins] = time.split(':').map(Number);
@@ -60,62 +45,56 @@ const QUOTES = [
   { text: "The pain you feel today will be the strength you feel tomorrow.", author: "Unknown" },
 ];
 
+const SETTING_KEYS = ['dailyFocus', 'lifeGoals', 'missionStatement', 'userName'];
+
+const DEFAULT_SETTINGS = {
+  userName: 'Krish',
+  dailyFocus: 'Become 1% better today',
+  lifeGoals: [
+    'Build a successful business',
+    'Achieve financial freedom',
+    'Master German language',
+    'Become physically elite',
+    'Read 52 books a year',
+  ],
+  missionStatement: 'I am building a disciplined, healthy, and knowledgeable life through consistent daily actions.',
+};
+
+const EMPTY_DATA = { journals: {}, taskLogs: {}, plannerNotes: {}, legacyHabitLogs: {}, habitLogs: {} };
+
+/** habitLogs for every date that has planner ticks or notes. */
+function deriveAllHabits(taskLogs = {}, plannerNotes = {}) {
+  const dates = new Set([...Object.keys(taskLogs), ...Object.keys(plannerNotes)]);
+  return Object.fromEntries([...dates].map(d => [d, deriveHabitLog(taskLogs[d], plannerNotes[d])]));
+}
+
+const HABITS_NEEDED = Math.ceil(HABITS.length * DAY_DONE_RATIO);
+const LEGACY_NEEDED = Math.ceil(LEGACY_HABIT_COUNT * DAY_DONE_RATIO);
+
+// Debounced saves for fields typed character-by-character.
+const noteTimers = {};
+const debounce = (key, fn, ms = 600) => { clearTimeout(noteTimers[key]); noteTimers[key] = setTimeout(fn, ms); };
+
 export const useStore = create(
   persist(
     (set, get) => ({
-      // User
-      userName: 'Krish',
+      ...DEFAULT_SETTINGS,
+      ...EMPTY_DATA,
       userAvatar: null,
 
-      // Habits - keyed by date string
-      habitLogs: {}, // { 'YYYY-MM-DD': { habitId: boolean } }
+      // Auth (not persisted): 'checking' | 'out' | 'in' | 'offline'
+      auth: { status: 'checking', user: null, error: null },
 
-      // Tasks - keyed by date string
-      taskLogs: {}, // { 'YYYY-MM-DD': { taskId: boolean } }
-
-      // Planner text (Top 3, idea, review) - keyed by date string
-      plannerNotes: {}, // { 'YYYY-MM-DD': { fieldKey: string | boolean } }
-
-      // Journals - keyed by date string
-      journals: {}, // { 'YYYY-MM-DD': journalObject }
-
-      // Scores - keyed by date string
-      scores: {}, // { 'YYYY-MM-DD': number }
-
-      // Streak
-      currentStreak: 0,
-      longestStreak: 0,
-
-      // Goals / Vision
-      dailyFocus: 'Become 1% better today',
-      lifeGoals: [
-        'Build a successful business',
-        'Achieve financial freedom',
-        'Master German language',
-        'Become physically elite',
-        'Read 52 books a year',
-      ],
-      missionStatement: 'I am building a disciplined, healthy, and knowledgeable life through consistent daily actions.',
-
-      // Getters
-      getTodayHabits: () => {
-        const state = get();
-        const d = today();
-        return state.habitLogs[d] || {};
-      },
+      /* ── Getters ── */
+      getTodayHabits: () => get().habitLogs[today()] || {},
       getTodayTasks: () => {
-        const state = get();
-        const d = today();
-        const overrides = state.taskLogs[d] || {};
+        const overrides = get().taskLogs[today()] || {};
         return DEFAULT_TASKS.map(t => ({ ...t, done: overrides[t.id] ?? t.done }));
       },
       getRecommendedTask: () => {
-        const state = get();
-        const d = today();
-        const overrides = state.taskLogs[d] || {};
+        const overrides = get().taskLogs[today()] || {};
         const tasks = DEFAULT_TASKS.map(t => ({ ...t, done: overrides[t.id] ?? t.done }));
         const nowMins = getCurrentMinutes();
-
         const timed = tasks.filter(t => !t.allDay);
 
         const activeTask = timed.find(t => !t.done && nowMins >= parseTimeToMinutes(t.time) && nowMins <= parseTimeToMinutes(t.endTime));
@@ -127,65 +106,177 @@ export const useStore = create(
       getTodayScore: () => {
         const state = get();
         const d = today();
-        if (state.scores[d] !== undefined) return state.scores[d];
-        // Calculate from habits + tasks
-        const habitLog = state.habitLogs[d] || {};
-        const taskLog = state.taskLogs[d] || {};
-        const habitDone = Object.values(habitLog).filter(Boolean).length;
-        const taskDone = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
-        const habitMax = DEFAULT_HABITS.length;
-        const taskMax = DEFAULT_TASKS.length;
-        return Math.round(((habitDone / habitMax) * 60 + (taskDone / taskMax) * 40));
+        const habitDone = HABITS.filter(h => state.habitLogs[d]?.[h.id]).length;
+        const taskDone = DEFAULT_TASKS.filter(t => state.taskLogs[d]?.[t.id]).length;
+        return Math.round((habitDone / HABITS.length) * 60 + (taskDone / DEFAULT_TASKS.length) * 40);
       },
-      getDailyQuote: () => {
-        const idx = new Date().getDate() % QUOTES.length;
-        return QUOTES[idx];
+      getDailyQuote: () => QUOTES[new Date().getDate() % QUOTES.length],
+
+      /** Everything the streak calendar needs about one day. */
+      getDayInfo: (key) => {
+        const s = get();
+        const habitsDone = HABITS.filter(h => s.habitLogs[key]?.[h.id]).length;
+        const tasksDone = DEFAULT_TASKS.filter(t => s.taskLogs[key]?.[t.id]).length;
+        const legacyDone = Object.values(s.legacyHabitLogs[key] || {}).filter(Boolean).length;
+        return {
+          habitsDone, habitsTotal: HABITS.length,
+          tasksDone, tasksTotal: DEFAULT_TASKS.length,
+          legacyDone,
+          journal: !!s.journals[key],
+          done: habitsDone >= HABITS_NEEDED || legacyDone >= LEGACY_NEEDED,
+          hasData: habitsDone > 0 || tasksDone > 0 || legacyDone > 0 || !!s.journals[key],
+        };
       },
 
-      // Sync status getter
+      /** First day with any recorded data (YYYY-MM-DD) or null. */
+      getFirstDate: () => {
+        const s = get();
+        const keys = [
+          ...Object.keys(s.taskLogs).filter(k => Object.values(s.taskLogs[k]).some(Boolean)),
+          ...Object.keys(s.legacyHabitLogs).filter(k => Object.values(s.legacyHabitLogs[k]).some(Boolean)),
+          ...Object.keys(s.journals),
+        ].sort();
+        return keys[0] || null;
+      },
+
+      /** { current, longest }. An unfinished today doesn't break the streak until the day is over. */
+      getStreaks: () => {
+        const { getDayInfo, getFirstDate } = get();
+        let current = 0;
+        let d = new Date();
+        if (!getDayInfo(dateKey(d)).done) d = addDays(d, -1);
+        while (getDayInfo(dateKey(d)).done) { current++; d = addDays(d, -1); }
+
+        let longest = 0, run = 0;
+        const first = getFirstDate();
+        if (first) {
+          const end = dateKey();
+          for (let x = parseKey(first); dateKey(x) <= end; x = addDays(x, 1)) {
+            run = getDayInfo(dateKey(x)).done ? run + 1 : 0;
+            longest = Math.max(longest, run);
+          }
+        }
+        return { current, longest: Math.max(longest, current) };
+      },
+
+      // Sync status getter (Google Sheets)
       getSyncStatus: () => getSyncStatus(),
 
-      // Actions
-      toggleHabit: (habitId) => {
+      /* ── Planner / habits ── */
+      setTasks: (ids, value) => {
         const d = today();
         set(state => {
-          const prev = state.habitLogs[d] || {};
-          const updated = { ...prev, [habitId]: !prev[habitId] };
-          scheduleSync({ ...state, habitLogs: { ...state.habitLogs, [d]: updated } });
-          return { habitLogs: { ...state.habitLogs, [d]: updated } };
+          const updated = { ...(state.taskLogs[d] || {}) };
+          ids.forEach(id => { updated[id] = value; });
+          const taskLogs = { ...state.taskLogs, [d]: updated };
+          const habitLogs = { ...state.habitLogs, [d]: deriveHabitLog(updated, state.plannerNotes[d]) };
+          scheduleSync({ ...state, taskLogs, habitLogs });
+          api.saveEntry('tasks', d, updated);
+          return { taskLogs, habitLogs };
         });
       },
       toggleTask: (taskId) => {
-        const d = today();
-        set(state => {
-          const prev = state.taskLogs[d] || {};
-          const updated = { ...prev, [taskId]: !prev[taskId] };
-          scheduleSync({ ...state, taskLogs: { ...state.taskLogs, [d]: updated } });
-          return { taskLogs: { ...state.taskLogs, [d]: updated } };
-        });
+        const done = !!get().taskLogs[today()]?.[taskId];
+        get().setTasks([taskId], !done);
+      },
+      /** Ticks/unticks the habit's whole planner group. Returns false for habits that can't be ticked directly. */
+      toggleHabit: (habitId) => {
+        const habit = HABITS.find(h => h.id === habitId);
+        const ids = habit ? habitTaskIds(habit) : [];
+        if (!ids.length) return false;
+        const log = get().taskLogs[today()] || {};
+        get().setTasks(ids, !ids.every(id => log[id]));
+        return true;
       },
       setPlannerNote: (key, value) => {
         const d = today();
-        set(state => ({
-          plannerNotes: { ...state.plannerNotes, [d]: { ...(state.plannerNotes[d] || {}), [key]: value } },
-        }));
-      },
-      saveJournal: (data) => {
-        const d = today();
         set(state => {
-          const newJournals = { ...state.journals, [d]: { ...data, date: d } };
-          scheduleSync({ ...state, journals: newJournals });
-          return { journals: newJournals };
+          const notes = { ...(state.plannerNotes[d] || {}), [key]: value };
+          debounce(`notes|${d}`, () => api.saveEntry('notes', d, get().plannerNotes[d]));
+          return {
+            plannerNotes: { ...state.plannerNotes, [d]: notes },
+            habitLogs: { ...state.habitLogs, [d]: deriveHabitLog(state.taskLogs[d], notes) },
+          };
         });
       },
-      syncToSheets: () => {
-        const state = get();
-        return syncNow(state);
+
+      /* ── Journal: resolves true once it is in the database, false if queued for retry ── */
+      saveJournal: (data) => {
+        const d = today();
+        const entry = { ...data, date: d, savedAt: new Date().toISOString() };
+        set(state => {
+          const journals = { ...state.journals, [d]: entry };
+          scheduleSync({ ...state, journals });
+          return { journals };
+        });
+        return api.saveEntry('journal', d, entry);
       },
-      setDailyFocus: (focus) => set({ dailyFocus: focus }),
-      updateLifeGoals: (goals) => set({ lifeGoals: goals }),
-      updateMission: (ms) => set({ missionStatement: ms }),
-      setUserName: (name) => set({ userName: name }),
+
+      /* ── Settings ── */
+      setDailyFocus: (focus) => { set({ dailyFocus: focus }); api.saveSetting('dailyFocus', focus); },
+      updateLifeGoals: (goals) => { set({ lifeGoals: goals }); api.saveSetting('lifeGoals', goals); },
+      updateMission: (ms) => { set({ missionStatement: ms }); api.saveSetting('missionStatement', ms); },
+      setUserName: (name) => { set({ userName: name }); api.saveSetting('userName', name); },
+
+      syncToSheets: () => syncNow(get()),
+
+      /* ── Auth + database ── */
+      initAuth: async () => {
+        api.setUnauthorizedHandler(() => set({ auth: { status: 'out', user: null, error: 'Session expired. Please log in again.' } }));
+        if (!api.getToken()) return set({ auth: { status: 'out', user: null, error: null } });
+        set({ auth: { ...get().auth, status: 'checking', error: null } });
+        try {
+          const user = await api.me();
+          await get().loadFromServer();
+          set({ auth: { status: 'in', user, error: null } });
+        } catch (err) {
+          if (err.status === 401) return; // handler already switched to 'out'
+          set({ auth: { status: 'offline', user: null, error: err.message } });
+        }
+      },
+
+      loginWith: async (username, password) => {
+        const user = await api.login(username, password);
+        await get().pushLocalData();
+        await get().loadFromServer();
+        set({ auth: { status: 'in', user, error: null } });
+      },
+
+      logoutUser: async () => {
+        await api.logout();
+        set({ ...DEFAULT_SETTINGS, ...EMPTY_DATA, auth: { status: 'out', user: null, error: null } });
+      },
+
+      /** Copies data held only in this browser into the database (never overwrites). */
+      pushLocalData: async () => {
+        const s = get();
+        const nonEmpty = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v && Object.keys(v).length));
+        await api.importData({
+          entries: {
+            journal: s.journals,
+            tasks: nonEmpty(s.taskLogs),
+            notes: nonEmpty(s.plannerNotes),
+            habits_legacy: nonEmpty(s.legacyHabitLogs),
+          },
+          settings: Object.fromEntries(SETTING_KEYS.map(k => [k, s[k]])),
+        });
+      },
+
+      loadFromServer: async () => {
+        await api.flush(); // send queued edits first so they aren't overwritten
+        const { entries, settings } = await api.fetchAll();
+        const taskLogs = entries.tasks || {};
+        const plannerNotes = entries.notes || {};
+        set({
+          ...DEFAULT_SETTINGS,
+          ...Object.fromEntries(SETTING_KEYS.filter(k => k in settings).map(k => [k, settings[k]])),
+          journals: entries.journal || {},
+          taskLogs,
+          plannerNotes,
+          legacyHabitLogs: entries.habits_legacy || {},
+          habitLogs: deriveAllHabits(taskLogs, plannerNotes),
+        });
+      },
 
       // Helpers exported
       DEFAULT_HABITS,
@@ -195,7 +286,24 @@ export const useStore = create(
     }),
     {
       name: 'ascend-storage',
-      version: 1,
+      version: 2,
+      // Offline cache of the database. Derived habits and auth state are rebuilt on load.
+      partialize: (s) => ({
+        ...Object.fromEntries(SETTING_KEYS.map(k => [k, s[k]])),
+        journals: s.journals, taskLogs: s.taskLogs, plannerNotes: s.plannerNotes, legacyHabitLogs: s.legacyHabitLogs,
+      }),
+      migrate: (persisted, version) => {
+        if (version < 2 && persisted) {
+          // v1 tracked 15 standalone habits; keep them as history.
+          const { habitLogs, ...rest } = persisted;
+          return { ...rest, legacyHabitLogs: habitLogs || {} };
+        }
+        return persisted;
+      },
+      merge: (persisted, current) => {
+        const s = { ...current, ...(persisted || {}) };
+        return { ...s, habitLogs: deriveAllHabits(s.taskLogs, s.plannerNotes) };
+      },
     }
   )
 );

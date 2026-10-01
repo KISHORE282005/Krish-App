@@ -203,3 +203,52 @@ export const DEFAULT_TASKS = [
     section: 'rules', time: '00:00', endTime: '23:59', priority: 'high', allDay: true, done: false,
   })),
 ];
+
+// ── Habits, derived from the planner ──
+// A habit is done when every item of its planner group(s) is ticked (or its rule is kept).
+// Ticking a habit ticks its whole planner group, so there is one source of truth.
+export const HABITS = [
+  { id: 'h_morning',  icon: '🏃', label: 'Morning Health & Mind', category: 'health',     groups: ['m_health'] },
+  { id: 'h_active',   icon: '🚴', label: 'Cycling / Activity',    category: 'health',     groups: ['e_health'] },
+  { id: 'h_ai',       icon: '💻', label: 'AI Engineer Roadmap',   category: 'learning',   groups: ['m_ai'] },
+  { id: 'h_german',   icon: '🇩🇪', label: 'German',               category: 'learning',   groups: ['e_german'] },
+  { id: 'h_knowledge',icon: '▶️', label: 'Useful YouTube / Knowledge', category: 'learning', groups: ['n_know'] },
+  { id: 'h_plan',     icon: '🎯', label: 'Daily Planning',        category: 'work',       groups: ['m_plan'] },
+  { id: 'h_rnd',      icon: '🔬', label: 'Company R&D',           category: 'work',       groups: ['w_rnd'] },
+  { id: 'h_work',     icon: '💼', label: 'Priority Work Done',    category: 'work',       groups: ['a_work'] },
+  { id: 'h_idea',     icon: '💡', label: 'One New Idea',          category: 'work',       groups: ['w_innov'] },
+  { id: 'h_business', icon: '🧠', label: 'Business Thinking',     category: 'work',       groups: ['n_biz'] },
+  { id: 'h_family',   icon: '👨‍👩‍👦', label: 'Family & Relationships', category: 'personal', groups: ['e_family'] },
+  { id: 'h_review',   icon: '📝', label: 'Daily Review',          category: 'personal',   review: true },
+  { id: 'h_noporn',   icon: '🚫', label: 'No Porn',               category: 'discipline', rules: ['r_noporn'] },
+  { id: 'h_social',   icon: '📵', label: 'No Unnecessary Social Media', category: 'discipline', rules: ['r_social'] },
+  { id: 'h_time',     icon: '⏳', label: 'No Wasted Time',        category: 'discipline', rules: ['r_time'] },
+];
+
+export const HABIT_CATEGORIES = [
+  { id: 'health',     label: 'Health',     icon: '💪', color: '#10B981' },
+  { id: 'learning',   label: 'Learning',   icon: '📚', color: '#63B3ED' },
+  { id: 'work',       label: 'Work',       icon: '💼', color: '#F5B94A' },
+  { id: 'personal',   label: 'Personal',   icon: '🌟', color: '#F472B6' },
+  { id: 'discipline', label: 'Discipline', icon: '🛡️', color: '#D4AF37' },
+];
+
+const GROUP_ITEMS = Object.fromEntries(ROUTINE.flatMap(s => s.groups.map(g => [g.id, g.items.map(i => i.id)])));
+
+/** Task ids that make up a habit (empty for the review habit). */
+export const habitTaskIds = (h) => [...(h.groups || []).flatMap(g => GROUP_ITEMS[g]), ...(h.rules || [])];
+
+export const isReviewDone = (notes = {}) => REVIEW_FIELDS.every(f => (notes[f.key] || '').trim());
+
+/** { habitId: boolean } for one day, from that day's planner ticks + notes. */
+export function deriveHabitLog(taskLog = {}, notes = {}) {
+  return Object.fromEntries(HABITS.map(h => [
+    h.id,
+    h.review ? isReviewDone(notes) : habitTaskIds(h).every(id => taskLog[id]),
+  ]));
+}
+
+// A day counts toward the streak when at least half of the habits are done.
+export const DAY_DONE_RATIO = 0.5;
+// Days tracked before the planner-based habits (old 15-habit list): same 50% rule.
+export const LEGACY_HABIT_COUNT = 15;

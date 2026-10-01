@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useStore, DEFAULT_HABITS, DEFAULT_TASKS } from '../store/useStore';
+import { HABIT_CATEGORIES } from '../store/routine';
+import { dateKey } from '../utils/date';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler
@@ -35,7 +37,7 @@ export default function Statistics() {
   const labels = days7.map(d => d.toLocaleDateString('en-US', { weekday:'short' }));
 
   const scoreData = days7.map(d => {
-    const key = d.toISOString().split('T')[0];
+    const key = dateKey(d);
     const hl = habitLogs[key] || {};
     const tl = taskLogs[key] || {};
     const hd = Object.values(hl).filter(Boolean).length;
@@ -43,21 +45,12 @@ export default function Statistics() {
     return Math.round((hd / DEFAULT_HABITS.length) * 60 + (td / DEFAULT_TASKS.length) * 40);
   });
 
-  const habitCategories = {
-    health:     DEFAULT_HABITS.filter(h=>h.category==='health').length,
-    discipline: DEFAULT_HABITS.filter(h=>h.category==='discipline').length,
-    learning:   DEFAULT_HABITS.filter(h=>h.category==='learning').length,
-    personal:   DEFAULT_HABITS.filter(h=>h.category==='personal').length,
-  };
-
-  const today = new Date().toISOString().split('T')[0];
-  const todayHL = habitLogs[today] || {};
-  const todayDone = {
-    health:     DEFAULT_HABITS.filter(h=>h.category==='health'&&todayHL[h.id]).length,
-    discipline: DEFAULT_HABITS.filter(h=>h.category==='discipline'&&todayHL[h.id]).length,
-    learning:   DEFAULT_HABITS.filter(h=>h.category==='learning'&&todayHL[h.id]).length,
-    personal:   DEFAULT_HABITS.filter(h=>h.category==='personal'&&todayHL[h.id]).length,
-  };
+  const todayHL = habitLogs[dateKey()] || {};
+  const categories = HABIT_CATEGORIES.map(c => ({
+    ...c,
+    total: DEFAULT_HABITS.filter(h => h.category === c.id).length,
+    done: DEFAULT_HABITS.filter(h => h.category === c.id && todayHL[h.id]).length,
+  }));
 
   const avgScore = scoreData.reduce((a,b) => a+b, 0) / 7 || 0;
   const maxScore = Math.max(...scoreData, 0);
@@ -91,12 +84,10 @@ export default function Statistics() {
   };
 
   const doughnutData = {
-    labels: ['Health', 'Discipline', 'Learning', 'Personal'],
+    labels: categories.map(c => c.label),
     datasets: [{
-      data: [
-        todayDone.health, todayDone.discipline, todayDone.learning, todayDone.personal
-      ],
-      backgroundColor: ['#10B981','#D4AF37','#63B3ED','#F472B6'],
+      data: categories.map(c => c.done),
+      backgroundColor: categories.map(c => c.color),
       borderWidth: 0,
     }]
   };
@@ -105,7 +96,7 @@ export default function Statistics() {
     { label:'Avg Score',    value: `${Math.round(avgScore)}`, unit:'/ 100', color:'var(--gold)' },
     { label:'Best Day',     value: `${maxScore}`,             unit:'pts',   color:'var(--emerald)' },
     { label:'Consistent',   value: `${consistency}/7`,        unit:'days',  color:'#63B3ED' },
-    { label:'Habits Done',  value: `${Object.values(todayHL).filter(Boolean).length}`, unit:`/ ${DEFAULT_HABITS.length}`, color:'#F472B6' },
+    { label:'Habits Done',  value: `${DEFAULT_HABITS.filter(h => todayHL[h.id]).length}`, unit:`/ ${DEFAULT_HABITS.length}`, color:'#F472B6' },
   ];
 
   return (
@@ -164,12 +155,7 @@ export default function Statistics() {
             }} />
           </div>
           <div style={{ flex:1, display:'flex', flexDirection:'column', gap:8 }}>
-            {[
-              { label:'Health',     done:todayDone.health,     total:habitCategories.health,     color:'#10B981' },
-              { label:'Discipline', done:todayDone.discipline, total:habitCategories.discipline, color:'#D4AF37' },
-              { label:'Learning',   done:todayDone.learning,   total:habitCategories.learning,   color:'#63B3ED' },
-              { label:'Personal',   done:todayDone.personal,   total:habitCategories.personal,   color:'#F472B6' },
-            ].map(cat => (
+            {categories.map(cat => (
               <div key={cat.label}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
                   <span style={{ fontSize:12, color:'var(--text-secondary)' }}>{cat.label}</span>

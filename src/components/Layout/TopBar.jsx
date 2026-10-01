@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
+import { pendingCount, onPendingChange } from '../../utils/api';
 
 const ALL_PAGES = [
   { key: 'dashboard',    label: 'Home',         icon: 'home' },
@@ -15,7 +16,9 @@ const ALL_PAGES = [
 
 export default function TopBar({ currentPage, setPage }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { userName, getTodayScore } = useStore();
+  const { userName, getTodayScore, logoutUser } = useStore();
+  const [pending, setPending] = useState(pendingCount);
+  useEffect(() => onPendingChange(setPending), []);
   const score = getTodayScore();
 
   const pageLabels = {
@@ -84,6 +87,13 @@ export default function TopBar({ currentPage, setPage }) {
             <div className="drawer-user">
               <p className="label-sm" style={{ marginBottom: 4 }}>Logged in as</p>
               <p style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 15 }}>{userName}</p>
+              <p style={{ fontSize: 12, color: pending ? 'var(--gold-dim)' : 'var(--emerald)', marginTop: 6 }}>
+                {pending ? `⏳ ${pending} change(s) waiting to save…` : '✓ All data saved to database'}
+              </p>
+              <button className="btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: '10px 16px' }}
+                onClick={() => { setMenuOpen(false); logoutUser(); }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>logout</span> Log out
+              </button>
             </div>
           </nav>
         </>

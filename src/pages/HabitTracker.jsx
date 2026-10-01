@@ -1,8 +1,16 @@
 import { useState } from 'react';
 import { useStore, DEFAULT_HABITS } from '../store/useStore';
+import { HABIT_CATEGORIES, ROUTINE, RULES } from '../store/routine';
+import { dateKey, today as todayKey } from '../utils/date';
 
-const CATEGORIES = ['all', 'health', 'discipline', 'learning', 'personal'];
-const CAT_LABELS = { all:'All', health:'🏥 Health', discipline:'💪 Discipline', learning:'📚 Learning', personal:'🌟 Personal' };
+const CATEGORIES = ['all', ...HABIT_CATEGORIES.map(c => c.id)];
+const CAT_LABELS = { all: 'All', ...Object.fromEntries(HABIT_CATEGORIES.map(c => [c.id, `${c.icon} ${c.label}`])) };
+
+// "Planner · Morning → Health & Mind" – where each habit is ticked
+const GROUP_WHERE = Object.fromEntries(ROUTINE.flatMap(s => s.groups.map(g => [g.id, `${s.title} → ${g.title}`])));
+const habitSource = (h) => h.review ? 'Planner → Night → Daily Review (answer all 6)'
+  : h.rules ? `Planner → Rules → ${RULES.find(r => r.id === h.rules[0])?.label}`
+  : `Planner → ${h.groups.map(g => GROUP_WHERE[g]).join(', ')}`;
 
 function HabitRing({ pct, size = 38 }) {
   const r = size / 2 - 4;
@@ -20,10 +28,11 @@ function HabitRing({ pct, size = 38 }) {
 
 export default function HabitTracker() {
   const { habitLogs, toggleHabit } = useStore();
+  const [hint, setHint] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [justToggled, setJustToggled] = useState(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayKey();
   const todayLog = habitLogs[today] || {};
 
   const filtered = activeCategory === 'all'
@@ -38,7 +47,7 @@ export default function HabitTracker() {
     let s = 0;
     const d = new Date();
     for (let i = 0; i < 365; i++) {
-      const key = d.toISOString().split('T')[0];
+      const key = dateKey(d);
       if (habitLogs[key]?.[habitId]) { s++; d.setDate(d.getDate()-1); }
       else break;
     }
@@ -52,7 +61,7 @@ export default function HabitTracker() {
     for (let i = 0; i < 30; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
+      const key = dateKey(d);
       total++;
       if (habitLogs[key]?.[habitId]) done++;
     }
@@ -60,7 +69,7 @@ export default function HabitTracker() {
   };
 
   const handleToggle = (id) => {
-    toggleHabit(id);
+    if (!toggleHabit(id)) { setHint(id); setTimeout(() => setHint(null), 3500); return; }
     setJustToggled(id);
     setTimeout(() => setJustToggled(null), 500);
   };
@@ -157,6 +166,9 @@ export default function HabitTracker() {
                   </div>
                   <span style={{ fontSize:11, color:'var(--text-muted)' }}>{monthPct}%</span>
                 </div>
+                <p style={{ fontSize:11, marginTop:4, color: hint === habit.id ? 'var(--gold)' : 'var(--text-muted)', opacity: hint === habit.id ? 1 : 0.7 }}>
+                  {hint === habit.id ? `✍️ Write it in ${habitSource(habit)}` : `📋 ${habitSource(habit)}`}
+                </p>
               </div>
 
               {/* Ring */}

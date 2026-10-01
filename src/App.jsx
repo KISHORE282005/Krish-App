@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useStore } from './store/useStore';
+import Login from './pages/Login';
 import TopBar from './components/Layout/TopBar';
 import BottomNav from './components/Layout/BottomNav';
 import Scene3D, { useTilt3D } from './components/Layout/Scene3D';
@@ -47,16 +49,34 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [page, setPage] = useState('dashboard');
+  const authStatus = useStore(s => s.auth.status);
+  const initAuth = useStore(s => s.initAuth);
   const PageComponent = PAGES[page]?.component || Dashboard;
   const [accent, glow] = ACCENTS[page] || ACCENTS.dashboard;
   useTilt3D();
 
+  useEffect(() => { initAuth(); }, [initAuth]);
+  useEffect(() => { if (authStatus !== 'in') setPage('dashboard'); }, [authStatus]);
+
+  let content;
+  if (authStatus === 'checking') {
+    content = <div className="app-splash" aria-label="Loading"><div className="login-orb" /></div>;
+  } else if (authStatus !== 'in') {
+    content = <Login />;
+  } else {
+    content = (
+      <>
+        <TopBar currentPage={page} setPage={setPage} PAGES={PAGES} />
+        <PageComponent key={page} setPage={setPage} />
+        <BottomNav current={page} setPage={setPage} items={NAV_ITEMS} />
+      </>
+    );
+  }
+
   return (
     <div className="app3d" style={{ '--accent': accent, '--accent-glow': glow }}>
       <Scene3D />
-      <TopBar currentPage={page} setPage={setPage} PAGES={PAGES} />
-      <PageComponent key={page} setPage={setPage} />
-      <BottomNav current={page} setPage={setPage} items={NAV_ITEMS} />
+      {content}
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useStore, DEFAULT_HABITS } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { dateKey } from '../utils/date';
 
 export default function CalendarPage({ setPage }) {
-  const { habitLogs, journals } = useStore();
+  const { journals, getDayInfo } = useStore();
+  useStore(s => s.habitLogs); // re-render on changes
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
 
@@ -12,23 +14,19 @@ export default function CalendarPage({ setPage }) {
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = dateKey();
 
   const getDayStatus = (day) => {
-    const d = new Date(year, month, day);
-    const key = d.toISOString().split('T')[0];
-    const hl = habitLogs[key] || {};
-    const done = Object.values(hl).filter(Boolean).length;
-    const total = DEFAULT_HABITS.length;
-    if (done === 0) return 'empty';
-    if (done >= total * 0.85) return 'perfect';
-    if (done >= total * 0.5) return 'partial';
+    const info = getDayInfo(getDateKey(day));
+    const ratio = info.habitsDone ? info.habitsDone / info.habitsTotal : info.legacyDone / 15;
+    if (!info.hasData) return 'empty';
+    if (ratio >= 0.85) return 'perfect';
+    if (info.done) return 'partial';
     return 'missed';
   };
 
   const getDateKey = (day) => {
-    const d = new Date(year, month, day);
-    return d.toISOString().split('T')[0];
+    return dateKey(new Date(year, month, day));
   };
 
   const prevMonth = () => {
@@ -46,8 +44,8 @@ export default function CalendarPage({ setPage }) {
   };
 
   const selectedJournal = selectedDay ? journals[getDateKey(selectedDay)] : null;
-  const selectedHabits  = selectedDay ? (habitLogs[getDateKey(selectedDay)] || {}) : {};
-  const selectedHabitCount = Object.values(selectedHabits).filter(Boolean).length;
+  const selectedInfo = selectedDay ? getDayInfo(getDateKey(selectedDay)) : null;
+  const selectedHabitCount = selectedInfo ? (selectedInfo.habitsDone || selectedInfo.legacyDone) : 0;
 
   // Summary stats
   const perfectDays  = Array.from({length:daysInMonth},(_,i)=>getDayStatus(i+1)).filter(s=>s==='perfect').length;

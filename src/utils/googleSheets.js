@@ -1,4 +1,5 @@
-import { DEFAULT_TASKS } from '../store/routine';
+import { DEFAULT_TASKS, HABITS } from '../store/routine';
+import { dateKey } from './date';
 
 /*
  * Google Sheets Sync Utility for Ascend
@@ -50,34 +51,34 @@ async function sendToSheets(action, payload) {
 }
 
 function buildDailyPayload(state) {
-  const d = new Date().toISOString().split('T')[0];
+  const d = dateKey();
   const habitLog = state.habitLogs[d] || {};
   const taskLog = state.taskLogs[d] || {};
   const journal = state.journals[d] || null;
 
-  const habitsDone = Object.values(habitLog).filter(Boolean).length;
+  const habitsDone = HABITS.filter(h => habitLog[h.id]).length;
   const tasksDone = DEFAULT_TASKS.filter(t => taskLog[t.id]).length;
 
   // Compute streak
   let streak = 0;
   const checkDate = new Date();
   for (let i = 0; i < 365; i++) {
-    const key = checkDate.toISOString().split('T')[0];
+    const key = dateKey(checkDate);
     const hl = state.habitLogs[key] || {};
     const count = Object.values(hl).filter(Boolean).length;
-    if (count >= 8) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
+    if (count >= Math.ceil(HABITS.length / 2)) { streak++; checkDate.setDate(checkDate.getDate() - 1); }
     else break;
   }
 
   // Compute score
-  const score = Math.round(((habitsDone / 15) * 60 + (tasksDone / DEFAULT_TASKS.length) * 40));
+  const score = Math.round(((habitsDone / HABITS.length) * 60 + (tasksDone / DEFAULT_TASKS.length) * 40));
 
   return {
     date: d,
     score,
     habitsDone,
-    habitsTotal: 15,
-    habitsPct: Math.round((habitsDone / 15) * 100),
+    habitsTotal: HABITS.length,
+    habitsPct: Math.round((habitsDone / HABITS.length) * 100),
     tasksDone,
     tasksTotal: DEFAULT_TASKS.length,
     tasksPct: Math.round((tasksDone / DEFAULT_TASKS.length) * 100),
